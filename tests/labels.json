@@ -1,0 +1,194 @@
+{
+  "_note": [
+    "Hand-verified boundary labels for resources/3 min Clips/mainvideo.mp4.",
+    "Each entry was judged from a full-size frame 0.5s either side of the",
+    "timestamp. Do not label from small thumbnails or a shorter gap: three of",
+    "these were first labelled from 200px frames 0.25s apart and got it wrong,",
+    "which made the detector look like it had to choose between missing cuts",
+    "and splitting shots in half. It does not.",
+    "",
+    "cuts       : a real cut - different place, subject, or camera setup",
+    "same_scene : one continuous shot in which something merely moved",
+    "",
+    "Add to these rather than replacing them. The suite reports precision and",
+    "recall against whatever is here, so a bigger set is a stricter test.",
+    "",
+    "Second round: the suite reported 10 of the detector's own boundaries as",
+    "unlabelled, which meant half its output was ungraded - the same gap that",
+    "hid the first bug. All 10 were judged from full-size pairs and added, and",
+    "the false-split count went from 2 of 19 to 7 of 24. The number did not",
+    "get worse; the measurement got honest. 168.57s is the least certain of",
+    "them: the camera swings from a trailer to a van in half a second and the",
+    "vision check reads it as a cut."
+  ],
+  "video": "resources/3 min Clips/mainvideo.mp4",
+  "tolerance": 0.5,
+  "cuts": [
+    {
+      "at": 0.4,
+      "was": "construction site -> rubble by an orange wall"
+    },
+    {
+      "at": 10.93,
+      "was": "street with cars -> different street, brick wall"
+    },
+    {
+      "at": 21.93,
+      "was": "street and buildings -> firefighter with hose"
+    },
+    {
+      "at": 32.13,
+      "was": "firefighter close-up -> wide shot of the same drill"
+    },
+    {
+      "at": 33.77,
+      "was": "wide drill shot -> different framing"
+    },
+    {
+      "at": 52.13,
+      "was": "white car and truck -> different angle on the street"
+    },
+    {
+      "at": 53.07,
+      "was": "hose spraying concrete -> jack and wheel in a garage"
+    },
+    {
+      "at": 58.73,
+      "was": "tool on the floor -> tyre and tarp"
+    },
+    {
+      "at": 60.7,
+      "was": "tyre and tarp -> cutting pallet slats"
+    },
+    {
+      "at": 81.47,
+      "was": "close-up on dry grass -> wide site with truck and excavator"
+    },
+    {
+      "at": 86.57,
+      "was": "spray -> hose on the ground"
+    },
+    {
+      "at": 98.97,
+      "was": "rubble and shovel -> CASE backhoe on a trailer"
+    },
+    {
+      "at": 111.77,
+      "was": "backhoe outdoors -> man at an indoor workbench"
+    },
+    {
+      "at": 128.7,
+      "was": "man with a red tool -> two men lifting a frame"
+    },
+    {
+      "at": 165.3,
+      "was": "two workers in a courtyard -> man tipping a bin, different place"
+    },
+    {
+      "at": 174.3,
+      "was": "foam-covered van in a garden -> forklift inside a warehouse"
+    },
+    {
+      "at": 191.9,
+      "was": "warehouse forklift -> indoor rack and grinder"
+    }
+  ],
+  "same_scene": [
+    {
+      "at": 5.27,
+      "why": "same towed pickup and tow truck, camera zooms out"
+    },
+    {
+      "at": 9.9,
+      "why": "same street, cars moving, camera steady"
+    },
+    {
+      "at": 27.9,
+      "why": "same drill, person walks into frame"
+    },
+    {
+      "at": 30.3,
+      "why": "same drill, camera drifts"
+    },
+    {
+      "at": 51.13,
+      "why": "same location, spray moves closer"
+    },
+    {
+      "at": 57.3,
+      "why": "identical framing - green box, red trolley, blue car; a tyre rolls in"
+    },
+    {
+      "at": 63.97,
+      "why": "same pallet, hand and tool move"
+    },
+    {
+      "at": 67.37,
+      "why": "same pallet and tool on both sides"
+    },
+    {
+      "at": 83.27,
+      "why": "same truck and digging, camera moved"
+    },
+    {
+      "at": 93.17,
+      "why": "same rubble on both sides"
+    },
+    {
+      "at": 107.87,
+      "why": "same backhoe on both sides"
+    },
+    {
+      "at": 117.47,
+      "why": "same workbench on both sides"
+    },
+    {
+      "at": 119.5,
+      "why": "same workbench, tool moves"
+    },
+    {
+      "at": 144.97,
+      "why": "same corrugated wall and person"
+    },
+    {
+      "at": 146.9,
+      "why": "same two workers, camera moved"
+    },
+    {
+      "at": 149.6,
+      "why": "same two workers, different pose"
+    },
+    {
+      "at": 151.3,
+      "why": "identical framing - same two men, same steps; one stands up"
+    },
+    {
+      "at": 154.1,
+      "why": "same location and people"
+    },
+    {
+      "at": 156.5,
+      "why": "same courtyard, same two men and stone slabs, camera pans"
+    },
+    {
+      "at": 168.57,
+      "why": "same foam splatter and garden on both sides, camera swings to the van"
+    },
+    {
+      "at": 170.5,
+      "why": "same white van on both sides"
+    },
+    {
+      "at": 172.57,
+      "why": "same van, camera moved"
+    },
+    {
+      "at": 185.3,
+      "why": "same warehouse pallets"
+    },
+    {
+      "at": 188.13,
+      "why": "same warehouse, forklift moves"
+    }
+  ]
+}

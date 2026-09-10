@@ -1,0 +1,77 @@
+Reaction Video Builder
+======================
+
+1. Unzip this whole folder somewhere you can write to (Desktop is fine).
+   Do not run it from inside the .zip.
+2. Double-click ReactionVideoBuilder.exe
+
+Nothing needs installing. FFmpeg is already inside the folder.
+
+Windows may show "Windows protected your PC" the first time, because the app
+is not code-signed. Click "More info" then "Run anyway".
+
+First run
+---------
+STEP 1 (left panel)  - "Add files..." and pick your SHORT reaction clips
+                       (1-3 seconds). Saved permanently; done once.
+STEP 2 (right panel) - "Add videos..." and pick the LONG input video(s)
+                       (3 minutes or more). One input = one output.
+Then "Start rendering".
+
+Everything the app writes - the reaction library, settings and finished
+videos - goes into the "data" folder next to the .exe:
+
+    data\output      finished videos
+    data\library.db  your reaction library
+    data\settings.json
+
+Keep the whole folder together. Moving just the .exe will not work.
+
+The XtroEdge AI key
+-------------------
+The app renders without one, but worse, so this is worth doing.
+
+Two jobs use it:
+
+  cut check     Checks every cut before a reaction is placed. Without it the
+                app relies on picture measurements alone, and on our test
+                footage those split 7 of 24 continuous shots down the middle -
+                meaning a reaction can appear in the MIDDLE of a shot instead
+                of at the end of it.
+  clip rating   Picks the clips worth reacting to. Without it the app simply
+                takes the clips in order.
+
+To enable both, put the key in a plain text file at:
+
+    data\xtroedge_key.txt
+
+(create the "data" folder next to the .exe first if it is not there yet), or
+set an XTROEDGE_API_KEY environment variable. The key is deliberately NOT
+inside this folder: it is per-customer and does not belong in a shared build.
+
+Check it worked with Tools > Environment check. It shows where the key was
+found and how much of today's quota is left, never the key itself. The status
+bar along the bottom should read "clip rating on" and "cut check on".
+
+Budget: about 4 requests and 12,000 tokens per video, so a 60-video day uses
+roughly half of a 500-request daily allowance. When the budget runs low the
+AI checks stand down by themselves; rendering never stops for quota.
+
+How long it takes
+-----------------
+About 2.5 minutes per 3-minute output on a machine with a hardware encoder
+(full HD 1080x1920, about 125 MB each), so a 60-video day is about 2.5 hours.
+Videos are done one at a time on purpose - if one fails the rest of the queue
+carries on, and the failure is listed with its reason rather than reported as
+done.
+
+If something looks wrong
+------------------------
+The app keeps a plain-text diary of every video it makes:
+
+    data\logs\app.log
+
+It records what was detected, what was checked, and why the video came out
+the way it did. If a result looks wrong, send that file (and data\settings.json)
+to whoever supports this app - it contains no key and no personal data, only
+what the app decided.

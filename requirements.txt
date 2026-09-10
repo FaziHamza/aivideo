@@ -1,0 +1,12 @@
+# Engine: FFmpeg and FFprobe must be on PATH (not pip-installable).
+# Nothing below is needed for the CLI to render -- detection falls back to
+# FFmpeg's own scene filter -- but each one adds something.
+
+PySide6-Essentials>=6.6    # desktop window
+scenedetect>=0.6.4         # alternative clip-boundary detector
+opencv-python>=4.9         # required by scenedetect
+numpy>=1.26                # used by the default histogram detector
+
+# Clip rating talks to XtroEdge AI over plain HTTPS using the standard
+# library, so there is no client package to install. Supply the key via the
+# XTROEDGE_API_KEY environment variable or data/xtroedge_key.txt.

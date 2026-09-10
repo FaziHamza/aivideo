@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+
+# Generated at runtime: settings, reaction DB, cache, temp, finished videos.
+data/
+
+# packaging
+build/
+dist/
+*.manifest
+
+# Sample footage - input videos and reaction clips, 683 MB of it. GitHub caps
+# a single file at 100 MB and two of the inputs are 372 MB and 290 MB, so none
+# of this can live in the repo. Kept on disk, where the tests read it from.
+resources/

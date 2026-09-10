@@ -1,0 +1,34 @@
+
+
+Final Python desktop tool flow:
+
+1. One long input video select.
+2. Multiple reaction videos select.
+3. Tool automatically separate clips detect kare.
+4. Har original clip ke baad exactly **one reaction** add kare.
+5. Reactions rotation mein repeat ho sakti hain.
+6. Source clips ko aapas mein mix nahi karega.
+7. Complete clips use karke final duration approximately/exactly **3 minutes** rakhega.
+8. Output: **9:16, 720×1280, MP4**, downloadable file size.
+9. Ek video complete hone ke baad next video process hoga.
+10. Daily target: **50–60 videos**.
+11. Vision LLM sirf doubtful clip boundaries verify karega.
+12. Reaction library save rahegi, lekin kabhi bhi replace/add ki ja sakegi.
+
+Python stack:
+
+```text
+PySide6 + FFmpeg + FFprobe + PySceneDetect
++ OpenCV + SQLite + optional Vision LLM
+```
+
+Next step mein pehle **working MVP desktop app** banayenge:
+
+* Video/reaction selection
+* Scene detection
+* Reaction insertion
+* 3-minute rendering
+* Progress bar
+* Output validation
+
+Uske baad Vision LLM aur `.exe` installer add karenge.
