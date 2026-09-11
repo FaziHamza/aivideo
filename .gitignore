@@ -8,6 +8,11 @@ data/
 # packaging
 build/
 dist/
+# Generated at build time from core.__version__ by packaging/version_info.py.
+# Checked in it would drift from the real version the first time anyone
+# bumped one in a hurry, which is the whole reason it is generated.
+packaging/version_info.txt
+
 *.manifest
 
 # Sample footage - input videos and reaction clips, 683 MB of it. GitHub caps

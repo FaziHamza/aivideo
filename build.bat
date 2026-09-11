@@ -39,7 +39,14 @@ copy /y "packaging\READ ME FIRST.txt" "dist\ReactionVideoBuilder\" >nul || goto 
 if defined MAKEZIP (
     echo Zipping...
     del "dist\ReactionVideoBuilder.zip" 2>nul
-    powershell -NoProfile -Command "Compress-Archive -Path 'dist\ReactionVideoBuilder' -DestinationPath 'dist\ReactionVideoBuilder.zip' -CompressionLevel Optimal" || goto :fail
+    rem -ErrorAction Stop plus the try/catch is what makes a failure here
+    rem visible. Compress-Archive writes its error and still leaves
+    rem powershell.exe exiting 0, so the plain `|| goto :fail` below never
+    rem fired: a zip that failed on a locked file reported "Done" and printed
+    rem a Send: line for a file that was not there. The existence check after
+    rem it is the belt to that braces.
+    powershell -NoProfile -Command "$ErrorActionPreference='Stop'; try { Compress-Archive -Path 'dist\ReactionVideoBuilder' -DestinationPath 'dist\ReactionVideoBuilder.zip' -CompressionLevel Optimal -ErrorAction Stop } catch { Write-Host $_.Exception.Message; exit 1 }" || goto :failzip
+    if not exist "dist\ReactionVideoBuilder.zip" goto :failzip
 )
 
 echo.
@@ -51,5 +58,13 @@ exit /b 0
 :fail
 echo.
 echo BUILD FAILED
+endlocal
+exit /b 1
+
+:failzip
+echo.
+echo ZIP FAILED - the folder in dist\ is fine, only the .zip is missing.
+echo A file inside the folder was probably still in use. Close the app and
+echo re-run, or zip dist\ReactionVideoBuilder yourself.
 endlocal
 exit /b 1

@@ -41,13 +41,24 @@ Two jobs use it:
   clip rating   Picks the clips worth reacting to. Without it the app simply
                 takes the clips in order.
 
-To enable both, put the key in a plain text file at:
+To enable both, paste the key into the window: it is the "XtroEdge key" row in
+Output settings, next to "Save key" and "Test". That row only appears while one
+of the two AI checks above it is ticked, because that is the only time the key
+does anything. Press Save key, then Test.
 
-    data\xtroedge_key.txt
+The window never shows the key back to you - at most the last four characters,
+so you can tell two keys apart - because this screen gets shared and
+screenshotted.
 
-(create the "data" folder next to the .exe first if it is not there yet), or
-set an XTROEDGE_API_KEY environment variable. The key is deliberately NOT
-inside this folder: it is per-customer and does not belong in a shared build.
+Two alternatives, if you would rather not type it into the window:
+
+  - put it in a plain text file at data\xtroedge_key.txt (create the "data"
+    folder next to the .exe first if it is not there yet)
+  - set an XTROEDGE_API_KEY environment variable, which takes priority over
+    anything saved in the window
+
+The key is deliberately NOT inside this folder: it is per-customer and does not
+belong in a shared build.
 
 Check it worked with Tools > Environment check. It shows where the key was
 found and how much of today's quota is left, never the key itself. The status

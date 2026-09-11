@@ -10,7 +10,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, QLockFile, QObject, Qt, QUrl
+from PySide6.QtCore import QEvent, QLockFile, QObject, Qt, QTimer, QUrl
 from PySide6.QtGui import (QAction, QDesktopServices, QFont, QIcon,
                            QGuiApplication, QKeySequence, QPixmap, QShortcut)
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox,
@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox,
                                QTableWidgetItem,
                                QTextEdit, QVBoxLayout, QWidget)
 
-from core import ffmpeg, planner
+from core import __version__, ffmpeg, planner
 from core.config import DATA_DIR, TEMP_DIR, Settings, ensure_dirs
 from core.library import VIDEO_SUFFIXES, ReactionLibrary
 from core.models import JobResult, RenderPlan
@@ -133,7 +133,10 @@ class MainWindow(QMainWindow):
         self._wheel_guard = WheelGuard(self)
         self._results: list[JobResult] = []
 
-        self.setWindowTitle("Reaction Video Builder")
+        # Version in the title: this window gets screenshotted when
+        # something looks wrong, and a screenshot that carries its own
+        # build number saves the first round of support questions.
+        self.setWindowTitle(f"Reaction Video Builder {__version__}")
         icon = theme.icon_path()
         if icon is not None:
             self.setWindowIcon(QIcon(str(icon)))
@@ -141,10 +144,11 @@ class MainWindow(QMainWindow):
         # row showing. A minimum as well as a default: without one the grid
         # rows collapse on top of each other rather than the window refusing
         # to shrink, which reads as a broken window instead of a small one.
-        # Small enough that no screen can force the layout past its minimum,
-        # which is what made the settings rows draw on top of each other.
-        # Everything above this size is handled by the scroll area.
-        self.setMinimumSize(820, 480)
+        # Width only; the height floor is left to the layout. Qt then refuses
+        # to shrink past what the column actually needs, rather than a
+        # hardcoded figure that could be lower than the truth and let the
+        # settings rows collide.
+        self.setMinimumWidth(820)
         self._size_to_screen(1280, 900)
         self.setAcceptDrops(True)
 
@@ -153,14 +157,20 @@ class MainWindow(QMainWindow):
         self._ui_ready = True      # from here on, edits are the user's
         self.refresh_reactions()
         self._refresh_status()
+        # Twice: once now, and once after Qt's first real layout, because
+        # during construction the grid has not been laid out and reports a
+        # shorter content height than it settles on.
+        self._fit_scroller()
+        QTimer.singleShot(0, self._fit_scroller)
 
     def _size_to_screen(self, want_w: int, want_h: int) -> None:
         """Open at the wanted size, or the screen's, whichever is smaller.
 
         Asking for a 900px-tall window on a screen with 680px of usable
         height puts the status bar and the results table below the bottom
-        edge, where nobody finds them. The panel scrolls, so a short window
-        costs nothing.
+        edge, where nobody finds them. The lists flex and the queue and
+        settings scroll, so a short window costs rows in a list rather than
+        a control.
         """
         # The roomiest screen, not the primary one. This machine's primary is
         # 1280x680 of usable space at 150% Windows scaling, which leaves the
@@ -181,8 +191,9 @@ class MainWindow(QMainWindow):
         # Deliberately not showMaximized() here: maximising during
         # construction pins the window to the primary screen before the move
         # above has taken effect, which put it back on the small one. The
-        # scroll area means a window smaller than the layout scrolls rather
-        # than clipping, so the size chosen above is safe on any screen.
+        # lists flex down to a small floor and the queue and settings scroll,
+        # so a window smaller than the layout's natural size gives up list
+        # rows rather than clipping a control.
 
     # ------------------------------------------------------------------
     # construction
@@ -245,18 +256,17 @@ class MainWindow(QMainWindow):
 
     def _build_ui(self) -> None:
         splitter = QSplitter(Qt.Horizontal, self)
+        # The gutter between STEP 1 and STEP 2, and it has to be set here.
+        # `QSplitter::handle { width: 18px }` in the stylesheet looks like it
+        # does this and does not: the handle paints at that width but the
+        # splitter keeps laying the panels out on handleWidth(), which stayed
+        # at the style default and left the two columns touching.
+        splitter.setHandleWidth(18)
         splitter.addWidget(self._build_reactions_panel())
-        # The right-hand column is taller than a 1366x768 laptop screen once
-        # the key row shows. Without a scroll area Qt squeezes the grid past
-        # its minimum and the rows draw on top of each other, which looks
-        # like a broken window rather than a small one.
-        scroller = QScrollArea(self)
-        scroller.setWidget(self._build_main_panel())
-        scroller.setWidgetResizable(True)
-        scroller.setFrameShape(QScrollArea.Shape.NoFrame)
-        scroller.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        splitter.addWidget(scroller)
+        # The right-hand column carries its own scroll area now, around the
+        # queue and settings only - see _build_main_panel for what scrolls,
+        # what stays pinned, and why it is a fallback rather than a fixture.
+        splitter.addWidget(self._build_main_panel())
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
         splitter.setSizes([320, 860])
@@ -325,26 +335,30 @@ class MainWindow(QMainWindow):
         outer.addWidget(self.reaction_alarm)
 
         grid = QGridLayout()
+        # The last field is the style tier only - theme.py decides what each
+        # one looks like, so the grouping can be redrawn without touching a
+        # single connection here. See "button purpose tiers" in that file.
         buttons = [
-            ("Add files...", self.add_reaction_files, 0, 0),
-            ("Add folder...", self.add_reaction_folder, 0, 1),
-            ("Replace all...", self.replace_reactions, 1, 0),
-            ("Remove selected", self.remove_reactions, 1, 1),
-            ("Move up", lambda: self.move_reaction(-1), 2, 0),
-            ("Move down", lambda: self.move_reaction(1), 2, 1),
+            ("Add files...", self.add_reaction_files, 0, 0, "btnAdd"),
+            ("Add folder...", self.add_reaction_folder, 0, 1, "btnAdd"),
+            ("Replace all...", self.replace_reactions, 1, 0, "danger"),
+            ("Remove selected", self.remove_reactions, 1, 1, "danger"),
+            ("Move up", lambda: self.move_reaction(-1), 2, 0, "btnQuiet"),
+            ("Move down", lambda: self.move_reaction(1), 2, 1, "btnQuiet"),
             # Unticking everything blocks every render, so make getting back
             # from that one click rather than one click per reaction.
-            ("Tick all", lambda: self.set_all_active(True), 3, 0),
-            ("Untick all", lambda: self.set_all_active(False), 3, 1),
+            ("Tick all", lambda: self.set_all_active(True), 3, 0, "btnQuiet"),
+            ("Untick all", lambda: self.set_all_active(False), 3, 1, "btnQuiet"),
             # Its own button because "select everything, then Remove" cannot
             # be done with ticks: a plain click on any row clears the previous
             # highlight (standard list behaviour), so ticking every box still
             # leaves only the last row selected. People tried exactly that
             # and got one deletion out of eight.
-            ("Remove ALL...", self.remove_all_reactions, 4, 0),
+            ("Remove ALL...", self.remove_all_reactions, 4, 0, "dangerStrong"),
         ]
-        for text, slot, row, col in buttons:
+        for text, slot, row, col, tier in buttons:
             btn = QPushButton(text, box)
+            btn.setObjectName(tier)
             btn.clicked.connect(slot)
             if text == "Remove selected":
                 btn.setToolTip(
@@ -375,8 +389,42 @@ class MainWindow(QMainWindow):
         menu.exec(self.reaction_list.mapToGlobal(pos))
 
     def _build_main_panel(self) -> QWidget:
+        """The right-hand column: the height is found first, hidden last.
+
+        Three shapes were tried. Scrolling the whole column took Start
+        rendering, the progress bars and the results table under the bottom
+        edge - the window looked complete because the settings filled it, so
+        the buttons read as missing rather than as scrolled past. Scrolling
+        only the queue and settings fixed that but hid half a settings grid,
+        and those two are the working area. Scrolling nothing at all cannot
+        be done: measured, the column overlaps itself until the window is
+        about 1400px tall, and a grid drawing over the action row is worse
+        than either.
+
+        So the height is bought rather than hidden, and the scroll is only
+        what is left over. The settings grid pays for itself out of the width
+        it was wasting - 450px down to 329, by pairing its rows into two
+        columns - the queue list is capped rather than asking for 192px to
+        show one row, and the vertical rhythm in theme.py is tight for the
+        same reason. That brings the queue and the settings to 584px
+        together, so from about 951px of window height upward they both fit
+        and no scrollbar appears at all.
+
+        Below that the queue and settings scroll and the action row, the
+        progress bars and the results table stay pinned - the failure that
+        started this was those three going missing, and they no longer can.
+        """
         panel = QWidget(self)
-        layout = QVBoxLayout(panel)
+        outer = QVBoxLayout(panel)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(4)
+
+        # The part that scrolls, and only if it has to. `layout` keeps its
+        # name so the sections below are assembled exactly as before.
+        config = QWidget(panel)
+        layout = QVBoxLayout(config)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
 
         # --- input queue ---
         queue_box = QGroupBox("STEP 2 - Input videos  (the LONG videos to cut up)")
@@ -389,22 +437,68 @@ class MainWindow(QMainWindow):
         queue_layout.addWidget(queue_hint)
         self.queue_list = QListWidget(queue_box)
         self.queue_list.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        # Elastic, and capped. A QListWidget asks for ~192px whatever is in
+        # it, so this box was 307px tall to show one queued video - and
+        # because it sits above the settings grid, every one of those unused
+        # pixels pushed the grid further down and brought the scrollbar on
+        # sooner. Capped at about five rows: the queue scrolls its own
+        # contents, so a 60-video batch is no worse off than before, and the
+        # floor lets it give way further on a short window.
+        self.queue_list.setMinimumHeight(56)
+        self.queue_list.setMaximumHeight(130)
         queue_layout.addWidget(self.queue_list, 1)
 
         row = QHBoxLayout()
-        for text, slot in (("Add videos...", self.add_inputs),
-                           ("Add folder...", self.add_input_folder),
-                           ("Remove selected", self.remove_inputs),
-                           ("Clear", self.clear_inputs)):
+        # Both removals here are quiet, not red: the queue is transient, so
+        # emptying it costs one re-add. Only the library ones delete something
+        # that was saved. Same labels as STEP 1, deliberately not same weight.
+        for text, slot, tier in (("Add videos...", self.add_inputs, "btnAdd"),
+                                 ("Add folder...", self.add_input_folder,
+                                  "btnAdd"),
+                                 ("Remove selected", self.remove_inputs,
+                                  "btnQuiet"),
+                                 ("Clear", self.clear_inputs, "btnQuiet")):
             btn = QPushButton(text, queue_box)
+            btn.setObjectName(tier)
             btn.clicked.connect(slot)
             row.addWidget(btn)
         row.addStretch(1)
         queue_layout.addLayout(row)
-        layout.addWidget(queue_box, 1)
+        # Stretch 0. With stretch 1 the box grew to fill the column while its
+        # capped list could not, and the QVBoxLayout spread the difference as
+        # gaps above the hint and around the list - a 245px box drawn 420px
+        # tall with holes in it. Spare height belongs to the results table.
+        layout.addWidget(queue_box)
 
         # --- settings ---
         layout.addWidget(self._build_settings_box())
+
+        scroller = QScrollArea(panel)
+        scroller.setWidget(config)
+        scroller.setWidgetResizable(True)
+        scroller.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroller.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroller.setMinimumHeight(120)
+        # Heavy stretch, plus a maximum pinned to the content height by
+        # _fit_scroller. Three things had to line up, each of which was wrong
+        # on its own first:
+        #
+        #   - A QScrollArea does not report its widget's height as its own
+        #     size hint; it reports a ~288px default. With no stretch it
+        #     collapsed, and the column scrolled at every window size.
+        #   - Sharing the spare height evenly with the results table (1 and
+        #     1) never let this half reach its content either, so the
+        #     scrollbar stayed up however tall the window got. Weighted 10,
+        #     it fills to its cap first and the table takes the rest.
+        #   - The maximum is what stops it growing *past* its content, so
+        #     spare height becomes table rather than gap. A maximum, unlike
+        #     the minimum tried before it, still lets this half shrink on a
+        #     short window - which is what keeps the scrollbar a fallback.
+        self._config = config
+        self._scroller = scroller
+        outer.addWidget(scroller, 10)
+        self._fit_scroller()
 
         # --- actions ---
         actions = QHBoxLayout()
@@ -426,11 +520,12 @@ class MainWindow(QMainWindow):
                     self.btn_open):
             actions.addWidget(btn)
         actions.addStretch(1)
-        layout.addLayout(actions)
+        outer.addLayout(actions)
 
         # --- progress ---
         prog_box = QGroupBox("Progress")
         prog_layout = QFormLayout(prog_box)
+        prog_layout.setVerticalSpacing(4)
         self.bar_current = QProgressBar(prog_box)
         self.bar_current.setRange(0, 1000)
         self.bar_overall = QProgressBar(prog_box)
@@ -440,7 +535,7 @@ class MainWindow(QMainWindow):
         self.label_status = QLabel("Ready.", prog_box)
         self.label_status.setWordWrap(True)
         prog_layout.addRow("Status", self.label_status)
-        layout.addWidget(prog_box)
+        outer.addWidget(prog_box)
 
         # --- results ---
         res_box = QGroupBox("Results")
@@ -454,7 +549,13 @@ class MainWindow(QMainWindow):
             1, QHeaderView.Stretch)
         self.results.doubleClicked.connect(self._open_result_row)
         res_layout.addWidget(self.results)
-        layout.addWidget(res_box, 1)
+        # Elastic, with a floor of about a header plus one row. This and the
+        # queue list are the only two things that give when the window is
+        # short - everything else on this column is a control, and a control
+        # that has been compressed out of reach is worse than a list you
+        # scroll. The table scrolls its own rows, so nothing is lost.
+        self.results.setMinimumHeight(56)
+        outer.addWidget(res_box, 1)
 
         return panel
 
@@ -588,6 +689,12 @@ class MainWindow(QMainWindow):
         self.label_key_state = QLabel("", box)
         self.label_key_state.setWordWrap(True)
         self.label_key_state.setObjectName("keyState")
+        # Room for two lines, reserved whether or not two are in use. A word
+        # wrapping label reports a one-line minimum and a taller hint, so the
+        # grid can be squeezed out of the difference and clip the second line
+        # of a two-line message. Reserving it keeps the row honest.
+        self.label_key_state.setMinimumHeight(
+            2 * self.label_key_state.fontMetrics().height())
 
         self.edit_output = QLineEdit(box)
         self.edit_output.editingFinished.connect(self._settings_changed)
@@ -596,7 +703,21 @@ class MainWindow(QMainWindow):
 
         self.label_estimate = QLabel("", box)
         self.label_estimate.setObjectName("hint")
+        self.label_estimate.setMinimumHeight(
+            self.label_estimate.fontMetrics().height())
 
+        # Two columns rather than ten stacked rows. The box was 450px tall in
+        # a frame 1254px wide - the Target length field was 497px of it to
+        # display "180.00 s" - so the height that pushed the action row off a
+        # short window was being spent on width nothing needed. Pairing the
+        # rows buys that height back and costs nothing: every label and
+        # control below is the same object with the same connections, only in
+        # a different cell.
+        #
+        # What stayed put and why: "Shave the last reaction" keeps its place
+        # beside Target length because that is the setting it modifies, and
+        # the AI checks keep their own label because the key row below them
+        # appears and disappears with them (see _update_ai_row).
         grid.addWidget(QLabel("Target length"), 0, 0)
         grid.addWidget(self.spin_target, 0, 1)
         grid.addWidget(self.chk_exact, 0, 2, 1, 2)
@@ -624,12 +745,20 @@ class MainWindow(QMainWindow):
         grid.addWidget(QLabel("Cut strength"), 3, 2)
         grid.addWidget(self.spin_sensitivity, 3, 3)
 
+        # Clip order gains the right-hand neighbour it did not have: the AI
+        # checks, which used to occupy a whole row of their own.
+        ai_row = QHBoxLayout()
+        ai_row.setContentsMargins(0, 0, 0, 0)
+        ai_row.setSpacing(14)
+        ai_row.addWidget(self.chk_cut_check)
+        ai_row.addWidget(self.chk_rank)
+        ai_row.addStretch(1)
+        widget_ai = QWidget(box)
+        widget_ai.setLayout(ai_row)
         grid.addWidget(QLabel("Clip order"), 4, 0)
         grid.addWidget(self.combo_selection, 4, 1)
-
-        grid.addWidget(QLabel("AI checks"), 5, 0)
-        grid.addWidget(self.chk_cut_check, 5, 1)
-        grid.addWidget(self.chk_rank, 5, 2, 1, 2)
+        grid.addWidget(QLabel("AI checks"), 4, 2)
+        grid.addWidget(widget_ai, 4, 3)
 
         key_row = QHBoxLayout()
         key_row.setContentsMargins(0, 0, 0, 0)
@@ -640,15 +769,22 @@ class MainWindow(QMainWindow):
         self.widget_key = QWidget(box)
         self.widget_key.setLayout(key_row)
 
-        grid.addWidget(self.label_key, 6, 0)
-        grid.addWidget(self.widget_key, 6, 1, 1, 3)
-        grid.addWidget(self.label_key_state, 7, 1, 1, 3)
+        grid.addWidget(self.label_key, 5, 0)
+        grid.addWidget(self.widget_key, 5, 1, 1, 3)
 
-        grid.addWidget(self.label_estimate, 8, 1, 1, 3)
+        # Both hint lines keep the full width, one row each. Sharing a row
+        # saved 23px and cost correctness: at a third of the width the env
+        # override message - "using the XTROEDGE_API_KEY environment
+        # variable, which takes priority over anything saved here" - needed
+        # 72px of a 64px row and lost its last line. That message is the only
+        # thing that explains why a key typed into this window does nothing,
+        # so it does not get truncated to tighten a layout.
+        grid.addWidget(self.label_key_state, 6, 1, 1, 3)
+        grid.addWidget(self.label_estimate, 7, 1, 1, 3)
 
-        grid.addWidget(QLabel("Output folder"), 9, 0)
-        grid.addWidget(self.edit_output, 9, 1, 1, 2)
-        grid.addWidget(btn_browse, 9, 3)
+        grid.addWidget(QLabel("Output folder"), 8, 0)
+        grid.addWidget(self.edit_output, 8, 1, 1, 2)
+        grid.addWidget(btn_browse, 8, 3)
         for control in (self.spin_target, self.spin_sensitivity,
                         self.spin_min_clip, self.combo_fit, self.combo_quality,
                         self.combo_detector, self.combo_selection,
@@ -657,7 +793,7 @@ class MainWindow(QMainWindow):
             control.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
         grid.setColumnStretch(1, 1)
-        grid.setVerticalSpacing(9)
+        grid.setVerticalSpacing(5)
         box.setSizePolicy(box.sizePolicy().horizontalPolicy(),
                           QSizePolicy.Policy.Fixed)
         return box
@@ -736,6 +872,30 @@ class MainWindow(QMainWindow):
         # The status bar carries both switches, so it has to follow them.
         self._refresh_status()
 
+    def _fit_scroller(self) -> None:
+        """Stop the scrolling half growing past what it holds.
+
+        Recomputed rather than fixed, because showing or hiding the key row
+        changes the content height - and a maximum left behind at the taller
+        figure would reopen the gap this closes.
+        """
+        config = getattr(self, "_config", None)
+        scroller = getattr(self, "_scroller", None)
+        if config is None or scroller is None:
+            return
+        config.layout().activate()
+        # Plus the horizontal scrollbar's own height. The cap limits the
+        # scroll *area*, but the content is measured against the *viewport*,
+        # and the area reserves a strip along the bottom for a horizontal
+        # bar - 11px here. Capped at the bare content height the viewport
+        # came out 11px short of it, so a vertical scrollbar sat there at
+        # every window size for the sake of 11 pixels. The cost of allowing
+        # for it is an 11px gap under the settings box when no horizontal
+        # bar is showing, which is the better half of that trade.
+        scroller.setMaximumHeight(config.sizeHint().height()
+                                  + scroller.horizontalScrollBar()
+                                            .sizeHint().height())
+
     def _update_ai_row(self) -> None:
         """Keep the AI switches, and the key row, honest about what they do."""
         from core import xtro
@@ -754,6 +914,8 @@ class MainWindow(QMainWindow):
 
         for widget in (self.label_key, self.widget_key, self.label_key_state):
             widget.setVisible(wanted)
+        if self._ui_ready:
+            self._fit_scroller()
         if not wanted:
             return
 
@@ -1374,7 +1536,8 @@ class MainWindow(QMainWindow):
         self._show_text("Render history", "\n".join(lines) or "Nothing yet.")
 
     def show_doctor(self) -> None:
-        lines = [f"{k}: {v}" for k, v in ffmpeg.tool_versions().items()]
+        lines = [f"Reaction Video Builder: {__version__}", ""]
+        lines += [f"{k}: {v}" for k, v in ffmpeg.tool_versions().items()]
         try:
             lines.append(f"encoders available: "
                          f"{', '.join(ffmpeg.available_encoders())}")
@@ -1468,7 +1631,25 @@ def main() -> int:
     # indistinguishable from "someone holds the lock" - so the very first
     # launch on a clean machine said 'Already running' with nothing running,
     # and the app could never be started at all.
-    ensure_dirs()
+    #
+    # And it is the first thing that can fail on a machine we have never
+    # seen. Unhandled, it reaches the user as PyInstaller's "Unhandled
+    # exception in script" box with a Python traceback in it - which reads as
+    # "this program is broken" when the actual problem is a folder someone
+    # cannot write to. The usual cause is unzipping into Program Files, so
+    # the message says where to put it instead.
+    try:
+        ensure_dirs()
+    except OSError as exc:
+        QMessageBox.critical(
+            None, "Cannot write to this folder",
+            f"Reaction Video Builder needs to create a \"data\" folder next "
+            f"to itself, and it cannot:\n\n{exc}\n\n"
+            f"It tried to use:\n{DATA_DIR}\n\n"
+            f"This usually means the app is in a protected location such as "
+            f"Program Files. Move it to your Desktop, or any folder you can "
+            f"save files in, and start it again.")
+        return 1
     lock = QLockFile(str(DATA_DIR / "app.lock"))
     lock.setStaleLockTime(0)
     if not lock.tryLock(200):

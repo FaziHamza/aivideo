@@ -15,7 +15,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from core import ffmpeg, planner, validate
+from core import __version__, ffmpeg, planner, validate
 from core.config import Settings, ensure_dirs
 from core.library import VIDEO_SUFFIXES, ReactionLibrary
 from core.pipeline import BatchProgress, Pipeline, summarise
@@ -61,6 +61,7 @@ def _expand(patterns: list[str]) -> list[Path]:
 def cmd_doctor(args) -> int:
     ensure_dirs()
     settings = Settings.load()
+    print(f"Reaction Video Builder {__version__}\n")
     print("Tools")
     for name, version in ffmpeg.tool_versions().items():
         print(f"  {name:9} {version}")
@@ -390,6 +391,10 @@ def build_parser() -> argparse.ArgumentParser:
         prog="cli.py",
         description="Reaction-video builder: long video in, 3-minute 9:16 MP4 out.",
     )
+    # Before any subcommand, so `cli.py --version` answers without needing to
+    # know one - which is what someone reading a bug report will reach for.
+    parser.add_argument("--version", action="version",
+                        version=f"Reaction Video Builder {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
     def add_render_options(p):
@@ -468,6 +473,14 @@ def main(argv: list[str] | None = None) -> int:
     except KeyboardInterrupt:
         print("\nInterrupted.", file=sys.stderr)
         return 130
+    except OSError as exc:
+        # Most often data/ cannot be created - a protected folder, or a
+        # read-only drive. A traceback here would be readable but would still
+        # bury the one thing worth saying.
+        print(f"\nCannot write to the data folder: {exc}", file=sys.stderr)
+        print("Move the app somewhere you can save files, then try again.",
+              file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

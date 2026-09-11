@@ -1,14 +1,18 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller recipe for the desktop app.  Built via build.bat.
+"""PyInstaller recipe for a SINGLE-FILE build.  Built via build-onefile.bat.
 
-Two things here are not boilerplate:
+The same app as app.spec, delivered as one .exe instead of a folder. The
+trade is startup time: everything here - Qt, OpenCV, FFmpeg - is unpacked to
+a temp directory on every launch, which the folder build does not do.
 
-* FFmpeg and FFprobe are copied into the bundle when they can be found, so the
-  machine this is handed to needs nothing installed.  core/ffmpeg.py looks in
-  the bundle before it looks at PATH.  Set NO_FFMPEG=1 to build without them
-  (about 420 MB smaller, but the user must install FFmpeg themselves).
-* data/ is deliberately NOT bundled.  It holds the reaction library, settings
-  and rendered output, and it is created next to the .exe on first run.
+Worth it when the app is opened once and left running for a day's batch, and
+not worth it when it is opened and closed repeatedly. Measure before
+choosing; build.bat still produces the folder version.
+
+data/ still lands next to the .exe, not in the temp payload: config.py reads
+sys.executable when frozen, and in onefile mode that is the real .exe path
+rather than the unpack directory. That is what keeps the reaction library and
+settings across launches.
 """
 
 import os
@@ -21,6 +25,8 @@ APP_NAME = "ReactionVideoBuilder"
 ROOT = Path(SPECPATH)
 
 # ---- bundled FFmpeg -------------------------------------------------------
+# NO_FFMPEG=1 drops ~193 MB from the file and a large part of the unpack time,
+# at the cost of every machine needing FFmpeg on PATH.
 binaries = []
 if os.environ.get("NO_FFMPEG") != "1":
     for tool in ("ffmpeg", "ffprobe"):
@@ -42,10 +48,6 @@ _vi_spec.loader.exec_module(_vi)
 VERSION_FILE = str(_vi.write(ROOT / "packaging" / "version_info.txt"))
 
 
-# ---- branding -------------------------------------------------------------
-# The header logo and the window icon. Bundled under assets/ so the paths in
-# desktop/theme.py resolve the same way frozen as they do from source; the
-# .exe icon is separate and has to be an .ico, hence both files.
 datas = [("assets/xtroedge-logo-colour.png", "assets"),
          ("assets/xtroedge-logo-white.png", "assets"),
          ("assets/xtroedge-symbol.png", "assets"),
@@ -73,16 +75,20 @@ a = Analysis(
 )
 pyz = PYZ(a.pure)
 
+# The single-file difference: the binaries and data go INTO the EXE
+# (exclude_binaries=False) and there is no COLLECT step after it.
 exe = EXE(
     pyz,
     a.scripts,
+    a.binaries,
+    a.datas,
     [],
-    exclude_binaries=True,
     name=APP_NAME,
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=False,
+    runtime_tmpdir=None,
     console=False,          # windowed: no console flashing behind the GUI
     disable_windowed_traceback=False,
     argv_emulation=False,
@@ -91,14 +97,4 @@ exe = EXE(
     entitlements_file=None,
     icon=ICON,
     version=VERSION_FILE,
-)
-
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.datas,
-    strip=False,
-    upx=False,
-    upx_exclude=[],
-    name=APP_NAME,
 )

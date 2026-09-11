@@ -29,6 +29,11 @@ the header rule and the progress chunk, and for hover tints.
 use the rest of that ramp (gray-200 for lines, gray-50 for the window). Any
 other grey would read as a second, slightly-off palette.
 
+**Buttons are tiered by consequence, not by category.** Adding, reordering and
+deleting a saved clip looked identical, so the grid had to be read rather than
+scanned. See "button purpose tiers" below for which tier means what and why
+the constructive one is a green tint rather than a second solid green.
+
 `state` is a dynamic Qt property, so a label can be repainted as ok/warn/bad
 by setting the property and re-polishing - see `_style_key_state` in app.py.
 """
@@ -61,6 +66,8 @@ DISABLED_TEXT = "#9CA3AF"
 OK = GREEN                   # a pass is on-brand by definition
 WARN = "#B45309"
 BAD = "#B91C1C"
+BAD_SOFT = "#FEF2F2"         # red tint: the fill under a destructive button
+BAD_EDGE = "#FCA5A5"         # a border that reads as red without shouting
 
 # The official logo with the charcoal wordmark - the light-background version.
 # There is a white-wordmark variant on the same server for dark backgrounds;
@@ -142,12 +149,16 @@ QLabel#brandTagline {{
 }}
 
 /* ---------- panels ---------- */
+/* margin-top and padding are deliberately tight. There are four of these
+   stacked in the right-hand column, so every pixel here is spent four times,
+   and the column has to fit a laptop screen without scrolling or squeezing
+   the settings grid. */
 QGroupBox {{
     background: {SURFACE};
     border: 1px solid {LINE};
     border-radius: 10px;
-    margin-top: 16px;
-    padding: 14px 14px 12px 14px;
+    margin-top: 10px;
+    padding: 9px 12px 8px 12px;
     font-weight: 600;
 }}
 QGroupBox::title {{
@@ -180,10 +191,10 @@ QLineEdit, QComboBox, QDoubleSpinBox, QSpinBox, QTextEdit {{
     background: {SURFACE};
     border: 1px solid {LINE_STRONG};
     border-radius: 7px;
-    padding: 6px 9px;
+    padding: 4px 9px;
     selection-background-color: {GREEN};
     selection-color: {WHITE};
-    min-height: 20px;
+    min-height: 18px;
 }}
 QLineEdit:hover, QComboBox:hover, QDoubleSpinBox:hover, QSpinBox:hover {{
     border-color: {MUTED};
@@ -225,8 +236,8 @@ QPushButton {{
     background: {SURFACE};
     border: 1px solid {LINE_STRONG};
     border-radius: 7px;
-    padding: 6px 14px;
-    min-height: 20px;
+    padding: 5px 14px;
+    min-height: 18px;
     font-weight: 500;
 }}
 QPushButton:hover {{
@@ -256,13 +267,99 @@ QPushButton#primary:pressed {{ background: #0F7434; }}
 QPushButton#primary:disabled {{
     background: #A7DCBB; border-color: #A7DCBB; color: #F2FBF5;
 }}
+/* ---------- button purpose tiers ----------
+
+   The panel buttons were all one look: nine identical white pills in a grid,
+   so "Add files..." - the thing a new user must press first, and the thing
+   the empty-library banner tells them to press - was indistinguishable from
+   "Remove ALL...", which empties the library for good. The eye had nothing
+   to sort them by, so every one of them had to be read.
+
+   Four tiers, and the split is by consequence rather than by category:
+
+     btnAdd        adds material. The constructive act in each panel.
+     (default)     the plain white pill, for anything that is neither.
+     btnQuiet      reversible and cheap - reordering, ticking, clearing a
+                   queue. Pushed back so the tiers above it can be seen.
+     danger        deletes saved library rows.
+     dangerStrong  deletes all of them.
+
+   Consequence, not category, is why STEP 2's "Remove selected" and "Clear"
+   are quiet while STEP 1's "Remove selected" is red. The two share a label
+   and look alike today, but the queue is transient - clearing it costs one
+   re-add - and the library is the saved thing a day's work depends on. The
+   old uniform styling hid exactly that difference.
+
+   btnAdd is a green *tint*, never the solid green: `#primary` (Start
+   rendering) is the one accented button on the screen and a second flat
+   green would compete with it. The tint reads as "the on-brand thing to do
+   here" at panel level while leaving the page's single primary intact.
+
+   Every tier restates :hover, because the shared QPushButton:hover tints
+   green and would otherwise turn a destructive button brand-coloured on the
+   way to being clicked. Each restates :disabled too - an ID selector
+   outranks the shared :disabled rule, so without these a greyed-out button
+   would keep its tier fill. Nothing here is disabled today; the rules are so
+   that staying correct is not conditional on that. */
+
+/* Constructive: adds material. */
+QPushButton#btnAdd {{
+    background: {GREEN_SOFT};
+    border: 1px solid {GREEN_EDGE};
+    color: {GREEN_DEEP};
+    font-weight: 600;
+}}
+QPushButton#btnAdd:hover {{
+    background: #D8F2E2; border-color: {GREEN}; color: {GREEN_DEEP};
+}}
+QPushButton#btnAdd:pressed {{ background: #C7EBD5; }}
+QPushButton#btnAdd:disabled {{
+    background: {DISABLED_BG}; color: {DISABLED_TEXT}; border-color: {LINE};
+}}
+
+/* Quiet: reversible, cheap, and not what the eye should land on first. */
+QPushButton#btnQuiet {{
+    background: transparent;
+    border: 1px solid {LINE};
+    color: {MUTED};
+    font-weight: 500;
+}}
+QPushButton#btnQuiet:hover {{
+    background: {SURFACE}; border-color: {LINE_STRONG}; color: {TEXT};
+}}
+QPushButton#btnQuiet:pressed {{ background: {DISABLED_BG}; }}
+QPushButton#btnQuiet:disabled {{
+    background: {DISABLED_BG}; color: {DISABLED_TEXT}; border-color: {LINE};
+}}
+
+/* Destructive: removes saved library rows. */
 QPushButton#danger {{ color: {BAD}; }}
 QPushButton#danger:hover {{
-    background: #FEF2F2; border-color: #FCA5A5; color: {BAD};
+    background: {BAD_SOFT}; border-color: {BAD_EDGE}; color: {BAD};
+}}
+QPushButton#danger:pressed {{ background: #FDE3E3; }}
+QPushButton#danger:disabled {{
+    background: {DISABLED_BG}; color: {DISABLED_TEXT}; border-color: {LINE};
+}}
+
+/* Destructive, and not recoverable: empties the library. Filled rather than
+   outlined, so it does not read as one more white pill in the grid. */
+QPushButton#dangerStrong {{
+    background: {BAD_SOFT};
+    border: 1px solid {BAD_EDGE};
+    color: {BAD};
+    font-weight: 600;
+}}
+QPushButton#dangerStrong:hover {{
+    background: #FDE3E3; border-color: {BAD}; color: {BAD};
+}}
+QPushButton#dangerStrong:pressed {{ background: #FBD5D5; }}
+QPushButton#dangerStrong:disabled {{
+    background: {DISABLED_BG}; color: {DISABLED_TEXT}; border-color: {LINE};
 }}
 
 /* ---------- checkboxes ---------- */
-QCheckBox {{ background: transparent; spacing: 8px; padding: 2px 0; }}
+QCheckBox {{ background: transparent; spacing: 8px; padding: 1px 0; }}
 QCheckBox::indicator {{
     width: 15px; height: 15px;
     border: 1px solid {LINE_STRONG};
@@ -286,7 +383,7 @@ QListWidget, QTableWidget {{
     outline: none;
 }}
 QListWidget::item, QTableWidget::item {{
-    padding: 5px 7px;
+    padding: 4px 7px;
     border-bottom: 1px solid #F3F4F6;
 }}
 QListWidget::item:selected, QTableWidget::item:selected {{
@@ -323,7 +420,10 @@ QProgressBar::chunk {{
 }}
 
 /* ---------- chrome ---------- */
-QSplitter::handle {{ background: transparent; width: 10px; }}
+/* The gutter between STEP 1 and STEP 2. Transparent, so it reads as space
+   rather than as a divider - the two panels are already bounded by their own
+   borders, and a line between them would be a third edge in the same place. */
+QSplitter::handle {{ background: transparent; width: 18px; }}
 QMenuBar {{ background: {SURFACE}; border-bottom: 1px solid {LINE}; }}
 QMenuBar::item {{ padding: 6px 11px; background: transparent; }}
 QMenuBar::item:selected {{ background: {GREEN_SOFT}; border-radius: 5px; }}
